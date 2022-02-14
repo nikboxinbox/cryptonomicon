@@ -72,7 +72,9 @@
                   CHD
                 </span>
               </div>
-              <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+              <template v-if="isRepeat">
+                <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+              </template>
             </div>
           </div>
           <button
@@ -211,18 +213,29 @@ export default {
           `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=291fb5327dcf921a78506c379e53a08b132994bf090ef708df1c8d6a122dc9ff`
         );
         const data = await f.json();
+<<<<<<< HEAD
         this.tickers.find((t) => t.name === tickerName).price =
           data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
         if (this.sell?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 3000);
+=======
+        this.tickers.find((t) => t.name === tickerName).price = data.USD;
+        tickerName.price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+        if (this.sell?.name === tickerName.name) {
+          this.graph.push(data.USD);
+        }
+      }, 30000);
+>>>>>>> c9d314c0ed60a7d3f92b62d44225c68b421d03d8
     },
     select(ticker) {
       this.sell = ticker;
       this.graph = [];
     },
     add() {
+<<<<<<< HEAD
       const currentTicker = {
         name: this.ticker.toUpperCase(),
         price: "-",
@@ -230,6 +243,27 @@ export default {
       this.tickers.push(currentTicker);
       localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
       this.subscribeToUpdates(currentTicker.name);
+=======
+      this.isRepeat = this.tickers.find(
+        (t) => t.name.toUpperCase() === this.ticker.toUpperCase()
+      );
+      if (!this.isRepeat) {
+        const currentTicker = {
+          name: this.ticker.toUpperCase(),
+          price: "-",
+        };
+
+        this.tickers.push(currentTicker);
+
+        this.ticker = "";
+        this.isRepeat;
+        localStorage.setItem(
+          "cryptonomicon-list",
+          JSON.stringify(this.tickers)
+        );
+        this.subscribeToUpdates(currentTicker.name);
+      }
+>>>>>>> c9d314c0ed60a7d3f92b62d44225c68b421d03d8
     },
 
     heandlerDelete(tickerToRemove) {
