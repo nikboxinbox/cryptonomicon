@@ -1,4 +1,5 @@
 // eslint-disable-next-line no-unused-vars
+//Получая сообщение с веб сокет вызывается метод updateTicker в качестве аргумента ему приходит цена и название тикера
 const API_KEY =
   "291fb5327dcf921a78506c379e53a08b132994bf090ef708df1c8d6a122dc9ff";
 // Map – это коллекция ключ/значение, имеет свои методы(наприммер map.set), и в отличии от Object в качестве ключа может быть любой тип данных(например обьект или буллевое значение true)
@@ -52,6 +53,19 @@ function unsubscribeFromTickerOnWs(ticker) {
     action: "SubRemove",
     subs: [`5~CCCAGG~${ticker}~USD`],
   });
+}
+// Дописать функцию , добавить проверку на курс к биткоину , если результат все равно фолс то отписка. И менять цвет тикера свойство колор. Возможно эту проверку поместить в подписку ..
+export function tickerValidation(ticker) {
+  socket.onmessage = (response) => {
+    const { PARAMETER, TYPE } = JSON.parse(response.data);
+    if (PARAMETER.includes(ticker) && TYPE === "500") {
+      sendToWebSocket({
+        action: "SubRemove",
+        subs: [`5~CCCAGG~${ticker}~BTC`],
+      });
+    }
+  };
+  return true;
 }
 
 export const subscribeToTicker = (ticker, cb) => {

@@ -2,51 +2,11 @@
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div class="container">
       <div class="w-full my-4"></div>
-      <section>
-        <div class="flex">
-          <div class="max-w-xs">
-            <label for="wallet" class="block text-sm font-medium text-gray-700"
-              >Тикер</label
-            >
-            <div class="mt-1 relative rounded-md shadow-md">
-              <input
-                v-model="ticker"
-                @keydown.enter="add"
-                type="text"
-                name="wallet"
-                id="wallet"
-                class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
-                placeholder="Например DOGE"
-              />
-            </div>
-          </div>
-        </div>
-        <p v-if="isRepeatTicker" class="text-sm text-red-300">
-          Такой тикер уже добавлен
-        </p>
-        <button
-          @click="add"
-          type="button"
-          class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          <!-- Heroicon name: solid/mail -->
-          <svg
-            class="-ml-0.5 mr-2 h-6 w-6"
-            xmlns="http://www.w3.org/2000/svg"
-            width="30"
-            height="30"
-            viewBox="0 0 24 24"
-            fill="#ffffff"
-          >
-            <path
-              d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
-            ></path>
-          </svg>
-          Добавить
-        </button>
-        <!-- <div class="ddfg">{{ tickerListc }}</div> -->
-      </section>
-
+      <add-ticker
+        @add-ticker="add"
+        :disabled="tooManyTickersAdded"
+        :tickers="tickers"
+      />
       <template v-if="tickers.length">
         <hr class="w-full border-t border-gray-600 my-4" />
         <div>
@@ -112,7 +72,10 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selectedTicker.name }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div
+          class="flex items-end border-gray-600 border-b border-l h-64"
+          ref="graph"
+        >
           <div
             v-for="(bar, idx) in normalizedGraph"
             :key="idx"
@@ -169,28 +132,24 @@
 // [x] При удалении тикера остается выбор
 
 import { subscribeToTicker, unsubscribeFromTicker } from "./api";
+import AddTicker from "./components/AddTicker.vue";
 
 export default {
   name: "App",
-
+  components: { AddTicker },
   data() {
     return {
-      ticker: "",
       filter: "",
       tickers: [],
       selectedTicker: null,
       graph: [],
       page: 1,
-      tickerList: null,
+      maxGraphElements: 1,
     };
   },
 
-  async created() {
-    const dataTikerList = await fetch(
-      "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
-    ).then((res) => res.json());
-    this.tickerList = Object.keys(dataTikerList.Data);
-
+  created() {
+    //Object.fromEntries - преобразует список пар ключ-значение в объект
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
@@ -202,17 +161,9 @@ export default {
         this[key] = windowData[key];
       }
     });
-
-    // if (windowData.filter) {
-    //   this.filter = windowData.filter;
-    // }
-
-    // if (windowData.page) {
-    //   this.page = windowData.page;
-    // }
-
+    // получаем список имевшихся на стр. тикеров который записан в локалсторедж в поле cryptonomicon-list
     const tickersData = localStorage.getItem("cryptonomicon-list");
-
+    // если данные получены , парсим и подписываемся на каждый тикер
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach((ticker) => {
@@ -224,11 +175,19 @@ export default {
 
     setInterval(this.updateTickers, 5000);
   },
+  mounted() {
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
+  },
 
   computed: {
-    isRepeatTicker() {
-      return this.tickers.find((t) => t.name === this.ticker);
+    tooManyTickersAdded() {
+      return this.tickers.length > 4;
     },
+
     startIndex() {
       return (this.page - 1) * 6;
     },
@@ -271,12 +230,24 @@ export default {
   },
 
   methods: {
+    calculateMaxGraphElements() {
+      if (!this.$refs.graph) {
+        return;
+      }
+
+      this.maxGraphElements = this.$refs.graph.clientWidth / 38;
+    },
+
     updateTicker(tickerName, price) {
       this.tickers
         .filter((t) => t.name === tickerName)
         .forEach((t) => {
           if (t === this.selectedTicker) {
             this.graph.push(price);
+
+            while (this.graph.length > this.maxGraphElements) {
+              this.graph.shift();
+            }
           }
           t.price = price;
         });
@@ -289,24 +260,24 @@ export default {
       return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
-    add() {
-      if (!this.isRepeatTicker) {
-        const currentTicker = {
-          name: this.ticker,
-          price: "-",
-        };
+    add(ticker) {
+      // Создаем тикер на основе введеного имени
 
-        this.tickers = [...this.tickers, currentTicker];
-        this.ticker = "";
-        this.filter = "";
-        subscribeToTicker(currentTicker.name, (newPrice) =>
-          this.updateTicker(currentTicker.name, newPrice)
-        );
-      }
+      const currentTicker = {
+        name: ticker,
+        price: "-",
+      };
+      // Помещаем тикер в массив с др. тикерами
+      this.tickers = [...this.tickers, currentTicker];
+      this.filter = "";
+
+      // Подписываемся на нужную валюту по имени тикера
+      subscribeToTicker(currentTicker.name, (newPrice) =>
+        this.updateTicker(currentTicker.name, newPrice)
+      );
     },
 
     select(ticker) {
-      console.log(ticker);
       this.selectedTicker = ticker;
     },
 
@@ -322,11 +293,10 @@ export default {
   watch: {
     selectedTicker() {
       this.graph = [];
+      this.$nextTick().then(this.calculateMaxGraphElements);
     },
-
-    tickers(newValue, oldValue) {
-      // Почему не сработал watch при добавлении?
-      console.log(newValue === oldValue);
+    //при изменениии значений в массиве тикерс мы перезаписываем его в локалсторедж в поле cryptonomicon-list
+    tickers() {
       localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
     },
 
